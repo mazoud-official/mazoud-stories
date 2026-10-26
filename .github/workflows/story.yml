@@ -1,0 +1,57 @@
+name: Mazoud daily story
+
+# Asia/Dubai is UTC+4 all year (no daylight saving), so 09:00 Dubai = 05:00 UTC.
+# GitHub can start scheduled jobs late, so the first run starts at 08:40 Dubai and
+# waits for 09:00; the later runs are retries and do nothing if today is done.
+on:
+  schedule:
+    - cron: "40 4 * * *"   # 08:40 Dubai: main run (waits until 09:00)
+    - cron: "20 5 * * *"   # 09:20 Dubai: retry
+    - cron: "0 6 * * *"    # 10:00 Dubai: retry
+    - cron: "0 8 * * *"    # 12:00 Dubai: retry
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run (default, posts nothing) or live"
+        type: choice
+        options: [dry-run, live]
+        default: dry-run
+
+# One run at a time, never cancelled half-way.
+concurrency:
+  group: mazoud-story
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # to commit state/history.json
+
+jobs:
+  story:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Configure git
+        run: |
+          git config user.name "mazoud-story-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Self-test
+        run: python3 -m unittest discover -s tests
+      - name: Publish (live only when switched on)
+        env:
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          GRAPH_HOST: ${{ vars.GRAPH_HOST }}
+          GRAPH_VERSION: ${{ vars.GRAPH_VERSION }}
+          # Live posting needs BOTH this repository variable set to "true" by the owner
+          # AND a scheduled run or a manual run with mode=live.
+          LIVE_PUBLISHING: ${{ vars.LIVE_PUBLISHING }}
+          MODE: ${{ github.event_name == 'schedule' && 'live' || inputs.mode }}
+        run: |
+          if [ "$MODE" = "live" ]; then
+            python3 publish.py --live
+          else
+            python3 publish.py --days 14
+          fi
