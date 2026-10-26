@@ -53,6 +53,29 @@ It runs on GitHub Actions, so your Mac can be off.
 
 Until the next step is done, scheduled runs are dry runs too.
 
+## Token renewal
+
+Instagram Login long-lived tokens last 60 days. The workflow *Instagram token renewal*
+(`refresh_token.py`) renews `IG_ACCESS_TOKEN` on the 1st of each month (06:00 Dubai) through
+Meta's `refresh_access_token` endpoint (`grant_type=ig_refresh_token`).
+
+- **Checks before renewing:** the token looks like an Instagram Login token (starts with `IG`,
+  with no stray spaces or quotes), Instagram accepts it, and it belongs to `IG_USER_ID`.
+  Instagram itself refuses a renewal if the token is short-lived, less than 24 hours old, or
+  expired.
+- **Checks before storing:** the renewed token must work for the same account and be valid for
+  at least 30 days. If not, nothing is stored and the old secret stays as it is.
+- **Saving the secret:** GitHub's built-in workflow token can't write secrets, so this uses a
+  second secret, `SECRETS_ADMIN_TOKEN`. That is a fine-grained personal access token limited to
+  this repository, with only **Secrets: Read and write**. The new value is passed to
+  `gh secret set` on standard input and is never printed, written to disk or committed.
+- **Expired or revoked token:** the run fails with an explanation (for example, that a new token
+  has to be generated in the Meta app dashboard). GitHub emails you about failed runs.
+- **Test safely:** *Run workflow* → `check` checks everything and never calls the renewal
+  endpoint, so it can't invalidate anything.
+- **Switching it on:** a renewal only happens when the repository variable
+  `TOKEN_REFRESH_ENABLED` is `true` (and the workflow is enabled).
+
 ## Going live (only after the owner approves)
 
 Set the repository variable **`LIVE_PUBLISHING`** to `true`. From then on, the 09:00 runs

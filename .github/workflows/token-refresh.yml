@@ -1,0 +1,45 @@
+name: Instagram token renewal
+
+# Instagram Login long-lived tokens last 60 days; this renews IG_ACCESS_TOKEN about
+# every 30 days (the 1st of each month, 06:00 Dubai = 02:00 UTC).
+# A scheduled run renews only when the repository variable TOKEN_REFRESH_ENABLED
+# is "true". A manual run defaults to "check", which never calls the refresh endpoint.
+on:
+  schedule:
+    - cron: "0 2 1 * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check (read-only, default) or refresh"
+        type: choice
+        options: [check, refresh]
+        default: check
+
+# Never at the same time as a story run, so a story never uses a token mid-swap.
+concurrency:
+  group: mazoud-story
+  cancel-in-progress: false
+
+# GITHUB_TOKEN only reads the code. Writing the secret uses SECRETS_ADMIN_TOKEN, a
+# fine-grained token limited to this repository's Secrets.
+permissions:
+  contents: read
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Self-test
+        run: python3 -m unittest discover -s tests
+      - name: Renew token
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          SECRETS_ADMIN_TOKEN: ${{ secrets.SECRETS_ADMIN_TOKEN }}
+          TOKEN_REFRESH_ENABLED: ${{ vars.TOKEN_REFRESH_ENABLED }}
+          MODE: ${{ github.event_name == 'schedule' && 'refresh' || inputs.mode }}
+        run: python3 refresh_token.py --$MODE
