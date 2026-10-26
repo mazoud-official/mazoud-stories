@@ -312,9 +312,11 @@ def dry_run(args, env):
     # Show the coming days of the rotation.
     sim = json.loads(json.dumps(state))
     print(f"Next {args.days} days:")
+    # Today's slot is gone once today is published or the day's cutoff has passed.
+    first = 1 if published_on(state, today) or (now.hour, now.minute) > LATEST else 0
     for i in range(args.days):
         num, name, cycle = next_photo(photos, sim)
-        day = (now + timedelta(days=i)).date().isoformat()
+        day = (now + timedelta(days=i + first)).date().isoformat()
         print(f"  {day} 09:00  {name}  (cycle {cycle})")
         sim["last"], sim["cycle"] = {"file": name, "number": num, "date": day}, cycle
 
