@@ -29,13 +29,11 @@ It runs on GitHub Actions, so your Mac can be off.
 
 ## Setup (one time)
 
-1. **Instagram:** the account must be a professional (Business or Creator) account, connected
-   to a Facebook Page, with a Meta developer app that has `instagram_basic` and
-   `instagram_content_publish`. For a token that doesn't expire, use a **system user** access
-   token from Meta Business Settings. Ordinary user tokens expire after 60 days and would stop
-   the posts.
-   - If you use *Instagram Login* instead (`graph.instagram.com`), set the repository variable
-     `GRAPH_HOST=graph.instagram.com`. Those tokens must be refreshed every 60 days.
+1. **Instagram:** the account must be a professional (Business or Creator) account. The Meta app
+   uses **Instagram Login** (`graph.instagram.com`) with the `instagram_business_basic` and
+   `instagram_business_content_publish` permissions. Its long-lived tokens last 60 days and must
+   be refreshed before they expire, or the stories stop. The repository variable
+   `GRAPH_HOST=graph.instagram.com` (also the default) selects these endpoints.
 2. **GitHub:** create a **public** repository and push this folder to it. Meta downloads each
    photo from its public `raw.githubusercontent.com` address, so the photos are publicly visible.
 3. **Secrets** (Settings → Secrets and variables → Actions):
@@ -48,7 +46,8 @@ It runs on GitHub Actions, so your Mac can be off.
 
 - **Locally:** `python3 publish.py --days 14` shows the next photo and the coming days.
 - **On GitHub:** Actions → *Mazoud daily story* → *Run workflow* → `dry-run`. This also checks
-  that the photo URL is reachable and that the credentials can read the account. It only reads;
+  that the next photo's URL is reachable, that the token is valid, that `IG_USER_ID` belongs to
+  it, and that it has publishing permission (without printing either value). It only reads;
   it changes no state.
 - **Tests:** `python3 -m unittest discover -s tests`.
 

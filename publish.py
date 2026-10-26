@@ -119,7 +119,9 @@ def published_on(state, day):
 # ---------------------------------------------------------------- Graph API
 
 class GraphAPI:
-    def __init__(self, user_id, token, host="graph.facebook.com", version="v23.0"):
+    """Instagram API with Instagram Login (graph.instagram.com) by default."""
+
+    def __init__(self, user_id, token, host="graph.instagram.com", version="v23.0"):
         self.user_id, self.token = user_id, token
         self.base = f"https://{host}/{version}"
 
@@ -135,11 +137,23 @@ class GraphAPI:
             with urllib.request.urlopen(req, timeout=60) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
-            body = e.read().decode(errors="replace").replace(self.token, "***")
-            raise RuntimeError(f"Graph API {method} {path}: HTTP {e.code}: {body}") from None
+            body = e.read().decode(errors="replace")
+            raise RuntimeError(self._redact(f"Graph API {method} {path}: HTTP {e.code}: {body}")) from None
+        except urllib.error.URLError as e:
+            raise RuntimeError(self._redact(f"Graph API {method} {path}: {e.reason}")) from None
 
-    def account(self):
-        return self._call("GET", self.user_id, {"fields": "id,username"})
+    def _redact(self, text):
+        # Neither the token nor the account ID ever reaches the log.
+        return text.replace(self.token, "<IG_ACCESS_TOKEN>").replace(self.user_id, "<IG_USER_ID>")
+
+    def me(self):
+        """The account the token belongs to (read-only)."""
+        return self._call("GET", "me", {"fields": "user_id,username,account_type"})
+
+    def publishing_limit(self):
+        """Read-only; needs the content publishing permission, so it also checks that."""
+        data = self._call("GET", f"{self.user_id}/content_publishing_limit", {"fields": "quota_usage,config"})
+        return (data.get("data") or [{}])[0]
 
     def create_story(self, image_url):
         # media_type=STORIES: never a feed post or reel
@@ -289,9 +303,9 @@ def dry_run(args, env):
     print(f"Dubai time now: {now:%Y-%m-%d %H:%M} | photos in rotation: {len(photos)} | cycle {state['cycle']}")
     if published_on(state, today):
         print(f"Already published today: {published_on(state, today)[0]['file']}")
-    num, name, cycle = next_photo(photos, state)
-    w, h = check_photo(os.path.join(PHOTOS_DIR, name))
-    print(f"Next story: {name} ({w}x{h}), cycle {cycle}")
+    _, next_name, cycle = next_photo(photos, state)
+    w, h = check_photo(os.path.join(PHOTOS_DIR, next_name))
+    print(f"Next story: {next_name} ({w}x{h}), cycle {cycle}")
     if state.get("pending"):
         print(f"Pending from an earlier run: {state['pending']}")
 
@@ -306,7 +320,7 @@ def dry_run(args, env):
 
     base = image_base(env)
     if base:
-        url = f"{base}/{name}"
+        url = f"{base}/{urllib.parse.quote(next_name)}"
         req = urllib.request.Request(url, method="HEAD")
         with urllib.request.urlopen(req, timeout=30) as r:
             ctype = r.headers.get("Content-Type", "")
@@ -314,8 +328,17 @@ def dry_run(args, env):
         if not ctype.startswith("image/"):
             raise Abort(f"image URL does not serve an image: {ctype}")
     if env.get("IG_USER_ID") and env.get("IG_ACCESS_TOKEN"):
-        acct = api_from(env).account()
-        print(f"Credentials OK (read-only check): @{acct.get('username')} id {acct.get('id')}")
+        api = api_from(env)
+        print(f"API host: {api.base}")
+        me = api.me()
+        print(f"Token valid: yes (account @{me.get('username')}, type {me.get('account_type')})")
+        if env["IG_USER_ID"].strip() not in (str(me.get("user_id")), str(me.get("id"))):
+            raise Abort("IG_USER_ID does not belong to the account of IG_ACCESS_TOKEN")
+        print("IG_USER_ID matches the token's account: yes")
+        limit = api.publishing_limit()
+        quota = (limit.get("config") or {}).get("quota_total")
+        print(f"Content publishing permission: yes (posts in last 24 h: {limit.get('quota_usage')}"
+              + (f" of {quota})" if quota else ")"))
     else:
         print("No Instagram credentials set; account check skipped.")
     print("DRY RUN: nothing was published and no state was changed.")
@@ -331,7 +354,7 @@ def image_base(env):
 
 def api_from(env):
     return GraphAPI(env["IG_USER_ID"], env["IG_ACCESS_TOKEN"],
-                    env.get("GRAPH_HOST") or "graph.facebook.com", env.get("GRAPH_VERSION") or "v23.0")
+                    env.get("GRAPH_HOST") or "graph.instagram.com", env.get("GRAPH_VERSION") or "v23.0")
 
 
 def main():
@@ -357,6 +380,9 @@ def main():
     except Abort as e:
         print(f"Stopped without publishing: {e}", file=sys.stderr)
         return 2
+    except (RuntimeError, OSError) as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
