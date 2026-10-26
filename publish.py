@@ -341,6 +341,12 @@ def dry_run(args, env):
               + (f" of {quota})" if quota else ")"))
     else:
         print("No Instagram credentials set; account check skipped.")
+    if env.get("GITHUB_ACTIONS") == "true":
+        # Proves the run may push state/history.json (authenticates, sends nothing).
+        r = subprocess.run(["git", "push", "--dry-run", "--porcelain"], cwd=ROOT, capture_output=True, text=True)
+        if r.returncode != 0:
+            raise Abort("this run could not push to the repository, so the history could not be saved")
+        print("History can be saved to GitHub (git push --dry-run): yes")
     print("DRY RUN: nothing was published and no state was changed.")
 
 
