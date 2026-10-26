@@ -146,5 +146,39 @@ class Tests(Base):
         self.assertEqual(self.api.published, [])
 
 
+class TestStoryTests(Base):
+    def run_test(self, action, confirm=""):
+        import io, contextlib
+        from unittest import mock
+        class Head:
+            headers = {"Content-Type": "image/jpeg", "Content-Length": str(len(JPEG))}
+            def __enter__(s): return s
+            def __exit__(s, *a): pass
+        api = self.api
+        api.me = lambda: {"user_id": "123", "username": "mazoud.ae", "account_type": "MEDIA_CREATOR"}
+        api.publishing_limit = lambda: {"quota_usage": 0}
+        env = {"IG_USER_ID": "123", "IG_ACCESS_TOKEN": "IGAAx", "IMAGE_BASE_URL": "https://x",
+               "TEST_CONFIRM": confirm}
+        argv = ["publish.py", "--test-story", "Mazoud_001.jpg", "--action", action]
+        with mock.patch.object(P, "PHOTOS_DIR", self.photos), mock.patch.object(P, "api_from", lambda e: api), \
+             mock.patch("urllib.request.urlopen", lambda *a, **k: Head()), mock.patch.dict(os.environ, env), \
+             mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(io.StringIO()), \
+             contextlib.redirect_stderr(io.StringIO()):
+            return P.main()
+
+    def test_prepare_never_publishes(self):
+        self.assertEqual(self.run_test("prepare"), 0)
+        self.assertEqual(len(self.api.containers), 1)
+        self.assertEqual(self.api.published, [])
+
+    def test_publish_needs_exact_confirmation(self):
+        self.assertEqual(self.run_test("publish", "PUBLISH"), 2)
+        self.assertEqual(self.run_test("publish", "publish Mazoud_001.jpg"), 2)
+        self.assertEqual(self.api.containers, {})
+        self.assertEqual(self.run_test("publish", "PUBLISH Mazoud_001.jpg"), 0)
+        self.assertEqual(self.files(), ["Mazoud_001.jpg"])
+        self.assertFalse(os.path.exists(self.state))
+
+
 if __name__ == "__main__":
     unittest.main()

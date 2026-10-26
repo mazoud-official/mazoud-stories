@@ -1,0 +1,46 @@
+name: One-time test Story
+
+# Manual only: no schedule. "prepare" never publishes. "publish" posts ONE Story and
+# requires typing the exact confirmation text. The daily rotation state is not touched.
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Photo to test"
+        default: Mazoud_001.jpg
+      action:
+        description: "prepare (checks + unpublished container) or publish (posts one Story)"
+        type: choice
+        options: [prepare, publish]
+        default: prepare
+      confirm:
+        description: "For publish only: type exactly  PUBLISH <file>"
+        default: ""
+
+concurrency:
+  group: mazoud-story
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Self-test
+        run: python3 -m unittest discover -s tests
+      - name: Test Story
+        env:
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          GRAPH_HOST: ${{ vars.GRAPH_HOST }}
+          GRAPH_VERSION: ${{ vars.GRAPH_VERSION }}
+          FILE: ${{ inputs.file }}
+          ACTION: ${{ inputs.action }}
+          TEST_CONFIRM: ${{ inputs.confirm }}
+        run: python3 publish.py --test-story "$FILE" --action "$ACTION"

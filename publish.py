@@ -357,7 +357,82 @@ def api_from(env):
                     env.get("GRAPH_HOST") or "graph.instagram.com", env.get("GRAPH_VERSION") or "v23.0")
 
 
+def is_mpo(path):
+    with open(path, "rb") as f:
+        head = f.read(65536)
+    return b"MPF\x00" in head
+
+
+def test_story(env, name, action, log=print):
+    """One manual Story test, outside the daily rotation (state is not touched).
+
+    prepare: checks the photo, the account and the URL, creates a STORIES container and
+             waits until Instagram has processed it, but never publishes it
+             (an unpublished container expires after 24 hours and is never shown).
+    publish: the same, then publishes that container once.
+    """
+    if not PHOTO_RE.match(name) or not os.path.isfile(os.path.join(PHOTOS_DIR, name)):
+        raise Abort(f"{name} is not a photo in photos/")
+    path = os.path.join(PHOTOS_DIR, name)
+    w, h = check_photo(path)
+    if is_mpo(path):
+        raise Abort(f"{name} is an MPO (extended JPEG), which Instagram does not accept")
+    log(f"Photo: {name}, JPEG, {w}x{h}, {os.path.getsize(path) / 1048576:.2f} MB, aspect {w / h:.3f} "
+        f"(Stories recommend 9:16 = 0.5625)")
+    base = image_base(env)
+    if not base:
+        raise Abort("no image base URL")
+    url = f"{base}/{urllib.parse.quote(name)}"
+    with urllib.request.urlopen(urllib.request.Request(url, method="HEAD"), timeout=30) as r:
+        ctype, length = r.headers.get("Content-Type", ""), r.headers.get("Content-Length")
+    if not ctype.startswith("image/jpeg") or (length and int(length) != os.path.getsize(path)):
+        raise Abort(f"public URL serves {ctype}, {length} bytes; expected the same JPEG")
+    log(f"Public URL serves the same file: yes ({ctype}, {length} bytes)")
+    api = api_from(env)
+    me = api.me()
+    if env["IG_USER_ID"].strip() not in (str(me.get("user_id")), str(me.get("id"))):
+        raise Abort("IG_USER_ID does not belong to the account of IG_ACCESS_TOKEN")
+    log(f"Account: @{me.get('username')} ({me.get('account_type')}); IG_USER_ID matches: yes")
+    limit = api.publishing_limit()
+    log(f"Publishing quota used in last 24 h: {limit.get('quota_usage')}")
+
+    container = api.create_story(url)  # media_type=STORIES
+    log("Instagram accepted a STORIES container for this image: yes")
+    status = None
+    for _ in range(30):
+        status = api.status(container)
+        if status in ("FINISHED", "PUBLISHED", "ERROR", "EXPIRED"):
+            break
+        time.sleep(10)
+    log(f"Container status: {status}")
+    if status != "FINISHED":
+        raise Abort(f"container is {status}; not publishing")
+    if action != "publish":
+        log("PREPARE ONLY: the container was not published; it expires unseen within 24 hours.")
+        return "prepared"
+    media_id = api.publish(container)
+    log(f"PUBLISHED one test Story (media id {media_id}). The daily rotation and its state were not changed.")
+    return "published"
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--test-story":
+        ap = argparse.ArgumentParser()
+        ap.add_argument("--test-story", required=True, metavar="FILE")
+        ap.add_argument("--action", choices=["prepare", "publish"], default="prepare")
+        args = ap.parse_args()
+        env = os.environ
+        try:
+            if args.action == "publish" and env.get("TEST_CONFIRM") != f"PUBLISH {args.test_story}":
+                raise Abort(f"publishing a test Story needs the confirmation text 'PUBLISH {args.test_story}'")
+            test_story(env, args.test_story, args.action)
+            return 0
+        except Abort as e:
+            print(f"Stopped: {e}", file=sys.stderr)
+            return 2
+        except (RuntimeError, OSError) as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 1
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--live", action="store_true", help="publish for real (also needs LIVE_PUBLISHING=true)")
     ap.add_argument("--days", type=int, default=7, help="dry run: how many days of the rotation to show")
