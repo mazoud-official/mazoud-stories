@@ -1,13 +1,22 @@
 {
   "version": 1,
   "cycle": 1,
-  "last": null,
-  "pending": {
-    "date": "2026-10-27",
+  "last": {
     "file": "Mazoud_001.jpg",
     "number": 1,
-    "cycle": 1,
-    "container_id": "17918389953494127"
+    "date": "2026-10-27"
   },
-  "history": []
+  "pending": null,
+  "history": [
+    {
+      "date": "2026-10-27",
+      "file": "Mazoud_001.jpg",
+      "number": 1,
+      "cycle": 1,
+      "status": "published",
+      "container_id": "17918389953494127",
+      "media_id": "18017209721953470",
+      "published_at": "2026-10-27T09:09:12+04:00"
+    }
+  ]
 }
