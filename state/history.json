@@ -2,17 +2,11 @@
   "version": 1,
   "cycle": 1,
   "last": {
-    "file": "Mazoud_004.jpg",
-    "number": 4,
-    "date": "2026-10-30"
-  },
-  "pending": {
-    "date": "2026-10-31",
     "file": "Mazoud_005.jpg",
     "number": 5,
-    "cycle": 1,
-    "container_id": "17919093795494127"
+    "date": "2026-10-31"
   },
+  "pending": null,
   "history": [
     {
       "date": "2026-10-27",
@@ -53,6 +47,16 @@
       "container_id": "17918940039494127",
       "media_id": "17926758306203143",
       "published_at": "2026-10-30T09:18:29+04:00"
+    },
+    {
+      "date": "2026-10-31",
+      "file": "Mazoud_005.jpg",
+      "number": 5,
+      "cycle": 1,
+      "status": "published",
+      "container_id": "17919093795494127",
+      "media_id": "18143246821715445",
+      "published_at": "2026-10-31T09:15:38+04:00"
     }
   ]
 }
