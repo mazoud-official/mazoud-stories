@@ -6,7 +6,13 @@
     "number": 14,
     "date": "2026-11-09"
   },
-  "pending": null,
+  "pending": {
+    "date": "2026-11-10",
+    "file": "Mazoud_015.jpg",
+    "number": 15,
+    "cycle": 1,
+    "container_id": null
+  },
   "history": [
     {
       "date": "2026-10-27",
